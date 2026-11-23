@@ -73,6 +73,12 @@ npm start
 
 ---
 
+## Releasing
+
+This folder is mirrored to [github.com/Veda-Lumina/mcp-server](https://github.com/Veda-Lumina/mcp-server). To release: bump the version in `package.json`, `server.json` and `src/index.ts`, run `npm publish --access public`, copy the files to the public repo, then push a `v*` tag there. The tag runs the GitHub Action that publishes to the official MCP registry.
+
+---
+
 ## License
 
 MIT © Veda Lumina LLC
