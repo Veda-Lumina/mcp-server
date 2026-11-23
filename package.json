@@ -1,0 +1,52 @@
+{
+  "name": "@vedalumina/mcp-server",
+  "mcpName": "io.github.Veda-Lumina/mcp-server",
+  "version": "1.1.1",
+  "description": "Model Context Protocol (MCP) Server for Veda Lumina Vedic Astrology Engine",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "vedalumina-mcp": "dist/index.js",
+    "mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "model-context-protocol",
+    "vedic-astrology",
+    "jyotish",
+    "kundli",
+    "ephemeris",
+    "muhurta"
+  ],
+  "author": "Veda Lumina",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "astronomy-engine": "^2.1.19",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "homepage": "https://www.vedalumina.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Veda-Lumina/mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Veda-Lumina/mcp-server/issues"
+  }
+}
