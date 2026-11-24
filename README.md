@@ -1,5 +1,7 @@
 # Veda Lumina Model Context Protocol (MCP) Server
 
+[![Veda-Lumina/mcp-server MCP server](https://glama.ai/mcp/servers/Veda-Lumina/mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/Veda-Lumina/mcp-server)
+
 Official Model Context Protocol (MCP) Server for **Veda Lumina** (https://www.vedalumina.com).
 
 Connects Vedic astrology (Jyotish) calculations — sidereal (Lahiri) chart, Vimshottari dasha, Panchanga limbs, Jaimini Chara Karakas and Vastu direction reference — to **Claude Desktop**, **Claude Enterprise**, and any MCP-compliant AI client.
