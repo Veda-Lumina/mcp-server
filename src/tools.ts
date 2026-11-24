@@ -5,7 +5,8 @@
 
 import { ENGINE_LABEL, norm360, resolveInstant, siderealPosition, siderealAscendant, lahiriAyanamsa, julianDay, WEEKDAY_LORDS } from "./astro.js";
 
-type Tool = { name: string; description: string; inputSchema: Record<string, unknown> };
+type ToolAnnotations = { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean };
+type Tool = { name: string; description: string; inputSchema: Record<string, unknown>; annotations?: ToolAnnotations };
 
 // ==========================================
 // CONSTANTS & ASTRONOMICAL TABLES
@@ -182,95 +183,130 @@ function calculateVimshottari(moonLong: number, birthDateStr: string, targetDate
   };
 }
 
-// Tool declarations
+// Tool declarations.
+// Every tool is a pure calculation: read-only, no network calls, nothing stored,
+// and the same input always gives the same output (except "today" defaults).
+const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+
+const BIRTH_DATE = { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Birth date as YYYY-MM-DD in the local calendar of the birth place, e.g. '1990-03-14'." };
+const BIRTH_TIME = { type: "string", pattern: "^\\d{2}:\\d{2}$", description: "Local clock time of birth, 24-hour HH:mm, e.g. '06:45'. Interpreted in `timezone` (or `utcOffsetHours`); with neither, it is read as UTC." };
+const LATITUDE = { type: "number", minimum: -90, maximum: 90, description: "Latitude of the place in decimal degrees, north positive (Jaipur = 26.91)." };
+const LONGITUDE = { type: "number", minimum: -180, maximum: 180, description: "Longitude of the place in decimal degrees, east positive (Jaipur = 75.79)." };
+const TIMEZONE = { type: "string", description: "IANA time zone of the place, e.g. 'Asia/Kolkata' or 'America/New_York'. Strongly recommended: it handles historical offsets and daylight saving. Without it (or `utcOffsetHours`) the time is read as UTC, and the response's `timeBasis` says so." };
+const UTC_OFFSET = { type: "number", minimum: -14, maximum: 14, description: "Alternative to `timezone`: a fixed UTC offset in hours, e.g. 5.5 for India. Ignored when `timezone` is given." };
+const UNUSED_PLACE = " Not used by this calculation (it needs no house cusps); accepted so the same birth details can be passed to every tool.";
+
+const TIME_NOTE = " The birth time is read in `timezone` (or `utcOffsetHours`); with neither, it is read as UTC and `timeBasis` in the response says so. Invalid dates or times return an error.";
+
 export const TOOLS: Tool[] = [
   {
     name: "calculate_vedic_chart",
-    description: "Calculates Vedic sidereal (Lahiri) planetary positions, Ascendant (Lagna), whole-sign houses, nakshatras and basic dignities using astronomy-engine (arc-minute class precision).",
+    description:
+      "Casts a Vedic (sidereal, Lahiri ayanamsha) birth chart: the Ascendant (Lagna) and the 9 grahas with sign, degree, nakshatra and pada, whole-sign house, retrograde flag and basic dignity (exalted, debilitated, own sign). " +
+      "Use it for questions about the chart itself, such as where a planet sits or what the Lagna is. For which planetary period is running, use calculate_dasha_periods; for the 7 Jaimini karakas, use calculate_jaimini_karakas. " +
+      "Returns JSON: engine, ayanamsaValue, timeBasis, utcInstant, ascendant{sign, degreeInSign, nakshatra, pada, lord} and planets[]{name, sign, degreeInSign, totalLongitude, nakshatra, pada, nakshatraLord, house, dignity, isRetrograde}. " +
+      "Positions use astronomy-engine (arc-minute class precision); Rahu and Ketu are mean nodes. Divisional charts, KP and Shadbala are not computed." + TIME_NOTE,
     inputSchema: {
       type: "object",
-      properties: {
-        birthDate: { type: "string", description: "Birth date in YYYY-MM-DD format (e.g. '1995-10-24')" },
-        birthTime: { type: "string", description: "Birth time in 24h format HH:mm (e.g. '14:30')" },
-        latitude: { type: "number", description: "Geographical latitude in decimal degrees" },
-        longitude: { type: "number", description: "Geographical longitude in decimal degrees" },
-        timezone: { type: "string", description: "IANA time zone of the birth place, e.g. 'Asia/Kolkata'. Strongly recommended — without it (or utcOffsetHours) the time is read as UTC." },
-        utcOffsetHours: { type: "number", description: "Alternative to timezone: fixed UTC offset in hours, e.g. 5.5" }
-      },
+      properties: { birthDate: BIRTH_DATE, birthTime: BIRTH_TIME, latitude: LATITUDE, longitude: LONGITUDE, timezone: TIMEZONE, utcOffsetHours: UTC_OFFSET },
       required: ["birthDate", "birthTime", "latitude", "longitude"]
-    }
+    },
+    annotations: { title: "Vedic birth chart", ...READ_ONLY }
   },
   {
     name: "calculate_dasha_periods",
-    description: "Calculates Vimshottari Dasha periods with active Mahadasha, Antardasha, and 120-year timeline boundaries.",
+    description:
+      "Calculates the Vimshottari dasha (120-year planetary period cycle) from the Moon's nakshatra at birth: the balance at birth, the 9 mahadashas with start and end dates, and the mahadasha and antardasha running on a chosen date. " +
+      "Use it for timing questions such as which period someone is in now or when the next one starts. For the chart positions themselves, use calculate_vedic_chart. " +
+      "Returns JSON: birthNakshatra, balanceAtBirth, currentDasha{mahadasha, antardasha, startDate, endDate, activeForDate} and mahadashaTimeline[]{lord, startDate, endDate, durationYears}. " +
+      "Dates are approximate to about a day (365.25-day years); pratyantardashas are not computed." + TIME_NOTE,
     inputSchema: {
       type: "object",
       properties: {
-        birthDate: { type: "string", description: "YYYY-MM-DD" },
-        birthTime: { type: "string", description: "HH:mm" },
-        latitude: { type: "number" },
-        longitude: { type: "number" },
-        timezone: { type: "string", description: "IANA time zone of the birth place, e.g. 'Asia/Kolkata'. Strongly recommended — without it (or utcOffsetHours) the time is read as UTC." },
-        utcOffsetHours: { type: "number", description: "Alternative to timezone: fixed UTC offset in hours, e.g. 5.5" },
-        targetDate: { type: "string", description: "Target date to evaluate active dasha (defaults to today)" }
+        birthDate: BIRTH_DATE, birthTime: BIRTH_TIME,
+        latitude: { ...LATITUDE, description: LATITUDE.description + UNUSED_PLACE },
+        longitude: { ...LONGITUDE, description: LONGITUDE.description + UNUSED_PLACE },
+        timezone: TIMEZONE, utcOffsetHours: UTC_OFFSET,
+        targetDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Date (YYYY-MM-DD) for which to report the running mahadasha and antardasha. Defaults to today." }
       },
-      required: ["birthDate", "birthTime", "latitude", "longitude"]
-    }
+      required: ["birthDate", "birthTime"]
+    },
+    annotations: { title: "Vimshottari dasha periods", ...READ_ONLY }
   },
   {
     name: "get_daily_panchang",
-    description: "Returns the 5 limbs of the Panchanga (Tithi, Vara, Nakshatra, Nitya Yoga, Karana) at local noon of a date. Hora, Choghadiya, Rahu Kaal and other sunrise-based windows are not computed by this server.",
+    description:
+      "Returns the 5 limbs of the Panchanga (Tithi, Vara, Nakshatra, Nitya Yoga, Karana) for a date at a place, computed at local noon. " +
+      "Use it for questions about a day, such as today's tithi or nakshatra, not about a person's birth chart (use calculate_vedic_chart for that). " +
+      "Returns JSON: date, computedAt, timeBasis and panchanga{tithi{name, paksha, number}, vara{day, lord}, nakshatra{name, lord}, yoga{name, auspicious}, karana{name, isVishtiBhadra}}. " +
+      "Values are a snapshot at noon, so a tithi or nakshatra that changes during the day shows only its noon value. Hora, Choghadiya, Rahu Kaal and other sunrise-based windows are not computed. Without `timezone` (or `utcOffsetHours`) noon is 12:00 UTC.",
     inputSchema: {
       type: "object",
       properties: {
-        date: { type: "string", description: "YYYY-MM-DD (defaults to today)" },
-        latitude: { type: "number" },
-        longitude: { type: "number" },
-        timezone: { type: "string", description: "IANA time zone of the birth place, e.g. 'Asia/Kolkata'. Strongly recommended — without it (or utcOffsetHours) the time is read as UTC." },
-        utcOffsetHours: { type: "number", description: "Alternative to timezone: fixed UTC offset in hours, e.g. 5.5" }
+        date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Calendar date as YYYY-MM-DD. Defaults to today (UTC)." },
+        latitude: LATITUDE, longitude: LONGITUDE, timezone: TIMEZONE, utcOffsetHours: UTC_OFFSET
       },
       required: ["latitude", "longitude"]
-    }
+    },
+    annotations: { title: "Daily Panchanga", ...READ_ONLY }
   },
   {
     name: "calculate_jaimini_karakas",
-    description: "Computes the 7 Jaimini Chara Karakas (Atmakaraka to Darakaraka) by degree within sign (7-karaka scheme; Arudha and Upapada are not computed).",
+    description:
+      "Computes the 7 Jaimini Chara Karakas (Atmakaraka to Darakaraka) by ranking the Sun to Saturn by degree within their signs, using the 7-karaka scheme (Rahu excluded). " +
+      "Use it for Jaimini questions such as who is the Atmakaraka or Darakaraka. For the full chart, use calculate_vedic_chart. " +
+      "Returns JSON: atmakaraka, amatyakaraka, karakas{title: 'Planet (degree°)'} and a one-line soulLesson for the Atmakaraka. " +
+      "Arudha padas, Upapada and Chara dasha are not computed. Karakas can change for births within minutes of two planets having nearly equal degrees." + TIME_NOTE,
     inputSchema: {
       type: "object",
       properties: {
-        birthDate: { type: "string", description: "YYYY-MM-DD" },
-        birthTime: { type: "string", description: "HH:mm" },
-        latitude: { type: "number" },
-        longitude: { type: "number" },
-        timezone: { type: "string", description: "IANA time zone of the birth place, e.g. 'Asia/Kolkata'. Strongly recommended — without it (or utcOffsetHours) the time is read as UTC." },
-        utcOffsetHours: { type: "number", description: "Alternative to timezone: fixed UTC offset in hours, e.g. 5.5" }
+        birthDate: BIRTH_DATE, birthTime: BIRTH_TIME,
+        latitude: { ...LATITUDE, description: LATITUDE.description + UNUSED_PLACE },
+        longitude: { ...LONGITUDE, description: LONGITUDE.description + UNUSED_PLACE },
+        timezone: TIMEZONE, utcOffsetHours: UTC_OFFSET
       },
-      required: ["birthDate", "birthTime", "latitude", "longitude"]
-    }
+      required: ["birthDate", "birthTime"]
+    },
+    annotations: { title: "Jaimini Chara Karakas", ...READ_ONLY }
   },
   {
     name: "analyze_vastu_zone",
-    description: "Provides directional energy analysis, elemental balance, and Vastu Purusha Mandala deity mappings for the 8 principal Vastu directions (N, NE, E, SE, S, SW, W, NW).",
+    description:
+      "Looks up Vastu Shastra reference data for one of the 8 principal directions: its name, element, ruling deity and planet, and the life areas traditionally linked to it. " +
+      "Use it when someone asks what a direction of a home or office governs in Vastu. It needs no birth data and does not assess a specific floor plan. " +
+      "Returns JSON: zoneCode, name, element, lord and attribute. An unknown code returns an error.",
     inputSchema: {
       type: "object",
       properties: {
         zone: {
           type: "string",
-          enum: ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"],
-          description: "Directional zone code"
+          enum: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+          description: "Direction code: N (North), NE (North-East, Ishanya), E (East), SE (South-East, Agneya), S (South), SW (South-West, Nairutya), W (West) or NW (North-West, Vayavya)."
         }
       },
       required: ["zone"]
-    }
+    },
+    annotations: { title: "Vastu direction reference", ...READ_ONLY }
   }
 ];
 
+
+/** Rejects missing or out-of-range coordinates instead of casting a chart for a wrong place. */
+function assertPlace(latitude: unknown, longitude: unknown): void {
+  if (typeof latitude !== "number" || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    throw new Error(`Invalid latitude: ${String(latitude)} (expected decimal degrees from -90 to 90, north positive)`);
+  }
+  if (typeof longitude !== "number" || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new Error(`Invalid longitude: ${String(longitude)} (expected decimal degrees from -180 to 180, east positive)`);
+  }
+}
 
 export async function callTool(name: string, args: unknown): Promise<{ isError?: boolean; content: Array<{ type: "text"; text: string }> }> {
   try {
     switch (name) {
       case "calculate_vedic_chart": {
         const { birthDate, birthTime, latitude, longitude, timezone, utcOffsetHours } = args as any;
+        assertPlace(latitude, longitude);
         const { date: instant, timeBasis } = resolveInstant(birthDate, birthTime, timezone, utcOffsetHours);
         const ayanamsaVal = lahiriAyanamsa(instant);
         const ascLong = siderealAscendant(instant, latitude, longitude);
@@ -340,6 +376,9 @@ export async function callTool(name: string, args: unknown): Promise<{ isError?:
         const { date: instant, timeBasis } = resolveInstant(birthDate, birthTime, timezone, utcOffsetHours);
         const { longitude: moonLong } = siderealPosition("Moon", instant);
 
+        if (targetDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(targetDate))) {
+          throw new Error(`Invalid targetDate: ${String(targetDate)} (expected YYYY-MM-DD)`);
+        }
         const dashaData = { ...calculateVimshottari(moonLong, birthDate, targetDate), engine: ENGINE_LABEL, timeBasis };
 
         return {
@@ -354,6 +393,7 @@ export async function callTool(name: string, args: unknown): Promise<{ isError?:
 
       case "get_daily_panchang": {
         const { date = new Date().toISOString().slice(0, 10), latitude, longitude, timezone, utcOffsetHours } = args as any;
+        assertPlace(latitude, longitude);
         // Local noon when a zone is given; otherwise 12:00 UTC (reported in timeBasis).
         const { date: instant, timeBasis } = resolveInstant(date, "12:00", timezone, utcOffsetHours);
         const { longitude: sunLong } = siderealPosition("Sun", instant);
@@ -465,16 +505,15 @@ export async function callTool(name: string, args: unknown): Promise<{ isError?:
           NW: { name: "North-West (Vayavya)", element: "Air/Space", lord: "Vayu / Moon", attribute: "Support Systems, Banking Assistance, Allies" }
         };
 
-        // Only the 8 principal directions have reference data; say so rather than
-        // returning a generic placeholder for the 8 in-between zones.
-        const info = VASTU_DATA[zone] || { name: zone, note: "Detailed data is available only for N, NE, E, SE, S, SW, W and NW." };
+        const info = VASTU_DATA[zone];
+        if (!info) throw new Error(`Unknown Vastu direction '${zone}'. Use one of N, NE, E, SE, S, SW, W, NW.`);
 
         return {
           content: [
             {
               type: "text",
               text: JSON.stringify({
-                system: "MahaVastu 16-Zone Spatial Grid",
+                system: "Vastu Shastra, 8 principal directions",
                 zoneCode: zone,
                 ...info
               }, null, 2)

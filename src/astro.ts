@@ -60,6 +60,17 @@ export function resolveInstant(
     throw new Error(`Invalid date/time: ${dateStr} ${timeStr}`);
   }
   const wall = Date.UTC(y, mo - 1, d, h, mi, s);
+  // Date.UTC silently rolls month 13 or 25:99 into a different instant; reject them.
+  const check = new Date(wall);
+  if (
+    check.getUTCFullYear() !== y || check.getUTCMonth() !== mo - 1 || check.getUTCDate() !== d ||
+    h < 0 || h > 23 || mi < 0 || mi > 59 || s < 0 || s > 59
+  ) {
+    throw new Error(`Invalid date/time: ${dateStr} ${timeStr} (expected a real calendar date YYYY-MM-DD and a 24-hour time HH:mm)`);
+  }
+  if (utcOffsetHours !== undefined && utcOffsetHours !== null && (!Number.isFinite(utcOffsetHours) || Math.abs(utcOffsetHours) > 14)) {
+    throw new Error(`Invalid utcOffsetHours: ${utcOffsetHours} (expected a number from -14 to 14)`);
+  }
   if (timezone) {
     // Two passes settle the offset across DST transitions.
     let utc = wall - zoneOffsetMinutes(timezone, wall) * 60000;

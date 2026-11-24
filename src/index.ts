@@ -21,7 +21,7 @@ import { TOOLS, callTool } from "./tools.js";
 const server = new Server(
   {
     name: "veda-lumina-mcp",
-    version: "1.1.1"
+    version: "1.1.2"
   },
   {
     capabilities: {

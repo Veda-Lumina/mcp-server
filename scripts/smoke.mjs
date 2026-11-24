@@ -33,6 +33,19 @@ const list = await rpc('tools/list', {});
 const names = (list.result?.tools ?? []).map((t) => t.name);
 for (const n of EXPECTED) if (!names.includes(n)) fail(`missing tool ${n}; got ${names.join(', ')}`);
 
+// Every tool documents itself: description, read-only annotations, and a description on every input.
+for (const t of list.result.tools) {
+  if ((t.description ?? '').length < 200) fail(`${t.name}: description too short`);
+  if (t.annotations?.readOnlyHint !== true || t.annotations?.openWorldHint !== false) fail(`${t.name}: missing read-only annotations`);
+  for (const [k, v] of Object.entries(t.inputSchema?.properties ?? {})) if (!v.description) fail(`${t.name}.${k}: no description`);
+}
+const vastu = list.result.tools.find((t) => t.name === 'analyze_vastu_zone');
+if (vastu.inputSchema.properties.zone.enum.length !== 8) fail('analyze_vastu_zone must offer exactly the 8 supported directions');
+
+// Bad input is an error, not a silently wrong chart.
+const bad = await rpc('tools/call', { name: 'calculate_vedic_chart', arguments: { birthDate: '1990-13-45', birthTime: '06:45', latitude: 26.91, longitude: 75.79 } });
+if (!bad.result?.isError) fail('an impossible date must return an error');
+
 const chart = await rpc('tools/call', { name: 'calculate_vedic_chart', arguments: { birthDate: '1990-03-14', birthTime: '06:45', latitude: 26.91, longitude: 75.79, timezone: 'Asia/Kolkata' } });
 if (chart.error || chart.result?.isError) fail(JSON.stringify(chart.error ?? chart.result));
 const text = chart.result?.content?.[0]?.text ?? '';
