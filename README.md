@@ -50,7 +50,7 @@ claude mcp add veda-lumina -- npx -y @vedalumina/mcp-server
 
 ### Other MCP clients
 
-Run `npx -y @vedalumina/mcp-server` as a stdio server. Node.js 18 or newer.
+Run `npx -y @vedalumina/mcp-server` as a stdio server. Node.js 20 or newer.
 
 ### Try it
 

@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Major versions (zod 4, TypeScript 7, new @types/node) need a deliberate upgrade and release.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         update-types: [minor, patch]

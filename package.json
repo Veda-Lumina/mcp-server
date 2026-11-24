@@ -49,5 +49,8 @@
   },
   "bugs": {
     "url": "https://github.com/Veda-Lumina/mcp-server/issues"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
